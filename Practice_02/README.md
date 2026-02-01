@@ -1,0 +1,1 @@
+There is new Practice 02 info, where you can find out how boolean , condition and loop works.
