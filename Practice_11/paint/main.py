@@ -23,7 +23,7 @@ PURPLE = (128, 0, 128)
 GRAY = (128, 128, 128)
 LIGHT_GRAY = (200, 200, 200)
 
-# Drawing modes
+# Modes
 MODE_BRUSH = "brush"
 MODE_LINE = "line"
 MODE_RECT = "rectangle"
@@ -31,212 +31,218 @@ MODE_SQUARE = "square"
 MODE_CIRCLE = "circle"
 MODE_RIGHT_TRIANGLE = "right_triangle"
 MODE_EQUILATERAL = "equilateral"
+MODE_ISO_TRI = "isosceles"
 MODE_RHOMBUS = "rhombus"
 MODE_ERASER = "eraser"
+MODE_BUCKET = "bucket"
 
-# Setup display
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Paint Program - With Preview Shadows")
+pygame.display.set_caption("Paint Program - With Brush Size")
 clock = pygame.time.Clock()
 
+
 class Button:
-    """Button class for UI elements"""
-    def __init__(self, x, y, width, height, color, text="", text_color=BLACK):
-        self.rect = pygame.Rect(x, y, width, height)
+    def __init__(self, x, y, w, h, color, text=""):
+        self.rect = pygame.Rect(x, y, w, h)
         self.color = color
         self.text = text
-        self.text_color = text_color
         self.font = pygame.font.Font(None, 18)
 
     def draw(self, surface):
-        """Draw button on screen"""
         pygame.draw.rect(surface, self.color, self.rect)
         pygame.draw.rect(surface, BLACK, self.rect, 2)
-        
-        if self.text:
-            text_surface = self.font.render(self.text, True, self.text_color)
-            text_rect = text_surface.get_rect(center=self.rect.center)
-            surface.blit(text_surface, text_rect)
 
-    def is_clicked(self, pos):
-        """Check if button was clicked"""
+        if self.text:
+            txt = self.font.render(self.text, True, BLACK)
+            surface.blit(txt, txt.get_rect(center=self.rect.center))
+
+    def clicked(self, pos):
         return self.rect.collidepoint(pos)
 
+
 class ColorPalette:
-    """Color selection palette"""
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.colors = [BLACK, WHITE, RED, GREEN, BLUE, YELLOW, 
-                      CYAN, MAGENTA, ORANGE, PURPLE, GRAY]
-        self.color_rects = []
-        self.selected_color = BLACK
-        
-        # Create color rectangles
-        for i, color in enumerate(self.colors):
-            rect = pygame.Rect(x + i * 35, y, 30, 30)
-            self.color_rects.append((rect, color))
+        self.colors = [BLACK, WHITE, RED, GREEN, BLUE, YELLOW,
+                       CYAN, MAGENTA, ORANGE, PURPLE, GRAY]
+        self.rects = []
+        self.selected = BLACK
 
-    def draw(self, surface):
-        """Draw color palette"""
-        for rect, color in self.color_rects:
-            pygame.draw.rect(surface, color, rect)
-            pygame.draw.rect(surface, BLACK, rect, 1)
-            
-            # Highlight selected color
-            if color == self.selected_color:
-                pygame.draw.rect(surface, WHITE, rect, 3)
+        for i, c in enumerate(self.colors):
+            r = pygame.Rect(x + i * 35, y, 30, 30)
+            self.rects.append((r, c))
 
-    def check_click(self, pos):
-        """Check if a color was selected"""
-        for rect, color in self.color_rects:
-            if rect.collidepoint(pos):
-                self.selected_color = color
+    def draw(self, surf):
+        for r, c in self.rects:
+            pygame.draw.rect(surf, c, r)
+            pygame.draw.rect(surf, BLACK, r, 1)
+            if c == self.selected:
+                pygame.draw.rect(surf, WHITE, r, 3)
+
+    def check(self, pos):
+        for r, c in self.rects:
+            if r.collidepoint(pos):
+                self.selected = c
                 return True
         return False
 
-def draw_square(surface, color, start, end, width=2):
-    """Draw a perfect square (equal width and height)"""
-    x1, y1 = start
-    x2, y2 = end
-    
-    # Calculate size (use max of width and height for perfect square)
-    size = max(abs(x2 - x1), abs(y2 - y1))
-    
-    # Determine direction
-    if x2 < x1:
-        x1 = x1 - size
-    if y2 < y1:
-        y1 = y1 - size
-    
-    rect = pygame.Rect(x1, y1, size, size)
-    pygame.draw.rect(surface, color, rect, width)
 
-def draw_right_triangle(surface, color, start, end, width=2):
-    """Draw a right triangle with right angle at start point"""
+# ---------- HELPERS ----------
+
+def norm_rect(x1, y1, x2, y2):
+    return pygame.Rect(min(x1, x2), min(y1, y2),
+                       abs(x2 - x1), abs(y2 - y1))
+
+
+def draw_right_triangle(surface, color, start, end, w):
     x1, y1 = start
     x2, y2 = end
-    
-    # Right triangle points (right angle at start position)
+    pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), (x1, y2)], w)
+
+
+def draw_equilateral_triangle(surface, color, start, end, w):
+    x1, y1 = start
+    x2, y2 = end
+
+    dx = x2 - x1
+    dy = y2 - y1
+
+    mx = (x1 + x2) / 2
+    my = (y1 + y2) / 2
+
+    side = math.hypot(dx, dy)
+    if side == 0:
+        return
+
+    h = (math.sqrt(3) / 2) * side
+
+    ux = -dy / side
+    uy = dx / side
+
+    apex = (mx + ux * h, my + uy * h)
+
+    pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), apex], w)
+
+
+def draw_isosceles_triangle(surface, color, start, end, w):
+    x1, y1 = start
+    x2, y2 = end
+
+    mx = (x1 + x2) / 2
+    my = (y1 + y2) / 2
+
+    dx = x2 - x1
+    dy = y2 - y1
+
+    side = math.hypot(dx, dy)
+    if side == 0:
+        return
+
+    h = side * 0.6
+
+    ux = -dy / side
+    uy = dx / side
+
+    apex = (mx + ux * h, my + uy * h)
+
+    pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), apex], w)
+
+
+def draw_rhombus(surface, color, start, end, w):
+    x1, y1 = start
+    x2, y2 = end
+
+    mx = (x1 + x2) / 2
+    my = (y1 + y2) / 2
+
     points = [
-        (x1, y1),  # Right angle corner
-        (x1, y2),  # Vertical leg
-        (x2, y2)   # Horizontal leg
+        (mx, y1),
+        (x2, my),
+        (mx, y2),
+        (x1, my)
     ]
-    pygame.draw.polygon(surface, color, points, width)
 
-def draw_equilateral_triangle(surface, color, start, end, width=2):
-    """Draw an equilateral triangle (all sides equal)"""
+    pygame.draw.polygon(surface, color, points, w)
+
+
+def flood_fill(surface, pos, target, replacement):
+    if target == replacement:
+        return
+
+    w, h = surface.get_size()
+    stack = [pos]
+
+    while stack:
+        x, y = stack.pop()
+
+        if x < 0 or y < 0 or x >= w or y >= h:
+            continue
+
+        if surface.get_at((x, y))[:3] != target:
+            continue
+
+        surface.set_at((x, y), replacement)
+
+        stack.extend([(x+1, y), (x-1, y), (x, y+1), (x, y-1)])
+
+
+# ---------- PREVIEW ----------
+
+def preview(surface, mode, color, start, end, w):
+    if not start or not end:
+        return
+
     x1, y1 = start
     x2, y2 = end
-    
-    # Calculate base width and height
-    base_width = abs(x2 - x1)
-    height = base_width * math.sqrt(3) / 2  # Height of equilateral triangle
-    
-    # Determine direction (up or down from start)
-    if y2 < y1:  # Drawing upward
-        height = -height
-    
-    # Calculate the three points
-    points = [
-        (x1, y2),                          # Bottom left
-        (x2, y2),                          # Bottom right
-        ((x1 + x2) // 2, y2 - height)      # Top point (apex)
-    ]
-    pygame.draw.polygon(surface, color, points, width)
 
-def draw_rhombus(surface, color, start, end, width=2):
-    """Draw a rhombus (diamond shape)"""
-    x1, y1 = start
-    x2, y2 = end
-    
-    # Calculate center point
-    center_x = (x1 + x2) // 2
-    center_y = (y1 + y2) // 2
-    
-    # Calculate the four points of the rhombus
-    points = [
-        (center_x, y1),     # Top point
-        (x2, center_y),     # Right point
-        (center_x, y2),     # Bottom point
-        (x1, center_y)      # Left point
-    ]
-    pygame.draw.polygon(surface, color, points, width)
+    if mode == MODE_RECT:
+        pygame.draw.rect(surface, LIGHT_GRAY,
+                         norm_rect(x1, y1, x2, y2), w)
 
-def draw_preview(surface, mode, color, start, end, width=2):
-    """Draw a preview shadow of the shape being drawn"""
-    # Create semi-transparent preview color
-    preview_color = (color[0], color[1], color[2], 128)
-    
-    if mode == MODE_LINE:
-        pygame.draw.line(surface, LIGHT_GRAY, start, end, width)
-        
-    elif mode == MODE_RECT:
-        rect = pygame.Rect(start[0], start[1], 
-                          end[0] - start[0], 
-                          end[1] - start[1])
-        pygame.draw.rect(surface, LIGHT_GRAY, rect, width)
-        
     elif mode == MODE_SQUARE:
-        x1, y1 = start
-        x2, y2 = end
         size = max(abs(x2 - x1), abs(y2 - y1))
-        if x2 < x1:
-            x1 = x1 - size
-        if y2 < y1:
-            y1 = y1 - size
-        rect = pygame.Rect(x1, y1, size, size)
-        pygame.draw.rect(surface, LIGHT_GRAY, rect, width)
-        
+        x = x1 if x2 >= x1 else x1 - size
+        y = y1 if y2 >= y1 else y1 - size
+        pygame.draw.rect(surface, LIGHT_GRAY, (x, y, size, size), w)
+
+    elif mode == MODE_LINE:
+        pygame.draw.line(surface, LIGHT_GRAY, start, end, w)
+
     elif mode == MODE_CIRCLE:
-        center = start
-        radius = int(((end[0] - center[0])**2 + (end[1] - center[1])**2)**0.5)
-        pygame.draw.circle(surface, LIGHT_GRAY, center, radius, width)
-        
+        r = int(((x2-x1)**2 + (y2-y1)**2)**0.5)
+        pygame.draw.circle(surface, LIGHT_GRAY, start, r, w)
+
     elif mode == MODE_RIGHT_TRIANGLE:
-        x1, y1 = start
-        x2, y2 = end
-        points = [(x1, y1), (x1, y2), (x2, y2)]
-        pygame.draw.polygon(surface, LIGHT_GRAY, points, width)
-        
+        pygame.draw.polygon(surface, LIGHT_GRAY,
+                            [(x1, y1), (x2, y2), (x1, y2)], w)
+
     elif mode == MODE_EQUILATERAL:
-        x1, y1 = start
-        x2, y2 = end
-        base_width = abs(x2 - x1)
-        height = base_width * math.sqrt(3) / 2
-        if y2 < y1:
-            height = -height
-        points = [(x1, y2), (x2, y2), ((x1 + x2) // 2, y2 - height)]
-        pygame.draw.polygon(surface, LIGHT_GRAY, points, width)
-        
+        draw_equilateral_triangle(surface, LIGHT_GRAY, start, end, w)
+
+    elif mode == MODE_ISO_TRI:
+        draw_isosceles_triangle(surface, LIGHT_GRAY, start, end, w)
+
     elif mode == MODE_RHOMBUS:
-        x1, y1 = start
-        x2, y2 = end
-        center_x = (x1 + x2) // 2
-        center_y = (y1 + y2) // 2
-        points = [(center_x, y1), (x2, center_y), (center_x, y2), (x1, center_y)]
-        pygame.draw.polygon(surface, LIGHT_GRAY, points, width)
+        draw_rhombus(surface, LIGHT_GRAY, start, end, w)
+
+
+# ---------- MAIN ----------
 
 def main():
-    """Main paint program loop"""
-    # Create canvas surface
     canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT - TOOLBAR_HEIGHT))
     canvas.fill(WHITE)
-    
-    # Drawing variables
+
     drawing = False
-    start_pos = None
-    current_pos = None
-    current_mode = MODE_BRUSH
-    brush_size = 5
-    line_width = 3
-    current_color = BLACK
+    start = None
+    current = None
+
+    mode = MODE_BRUSH
+    color = BLACK
+
+    # 🔥 NEW SIZE SYSTEM
+    brush_size = 6
     eraser_size = 20
-    
-    # Create UI buttons (2 rows)
+
     buttons = [
-        # Row 1
         Button(10, 5, 60, 25, GRAY, "Brush"),
         Button(75, 5, 60, 25, GRAY, "Line"),
         Button(140, 5, 60, 25, GRAY, "Rect"),
@@ -246,206 +252,158 @@ def main():
         Button(410, 5, 70, 25, GRAY, "E-Tri"),
         Button(485, 5, 70, 25, GRAY, "Rhombus"),
         Button(560, 5, 60, 25, GRAY, "Eraser"),
-        Button(625, 5, 60, 25, WHITE, "Clear")
+        Button(625, 5, 60, 25, WHITE, "Clear"),
+        Button(690, 5, 70, 25, GRAY, "Bucket"),
+        Button(765, 5, 70, 25, GRAY, "Iso-Tri")
     ]
-    
-    # Color palette
-    color_palette = ColorPalette(10, 40)
-    
-    # Size control buttons
-    size_up_btn = Button(700, 5, 25, 25, GRAY, "+")
-    size_down_btn = Button(730, 5, 25, 25, GRAY, "-")
-    size_text_font = pygame.font.Font(None, 20)
-    
+
+    # 🔥 SIZE BUTTONS
+    plus_btn = Button(860, 5, 30, 25, GRAY, "+")
+    minus_btn = Button(860, 35, 30, 25, GRAY, "-")
+
+    palette = ColorPalette(10, 40)
+
     running = True
-    
+
     while running:
-        # Get mouse position
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        canvas_mouse_y = mouse_y - TOOLBAR_HEIGHT
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        mx, my = pygame.mouse.get_pos()
+        cy = my - TOOLBAR_HEIGHT
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
                 running = False
-            
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = event.pos
-                
-                # Check if clicking in toolbar area
+
+            elif e.type == pygame.MOUSEBUTTONDOWN:
+                x, y = e.pos
+
                 if y < TOOLBAR_HEIGHT:
-                    # Mode selection buttons
-                    if buttons[0].is_clicked(event.pos):
-                        current_mode = MODE_BRUSH
-                    elif buttons[1].is_clicked(event.pos):
-                        current_mode = MODE_LINE
-                    elif buttons[2].is_clicked(event.pos):
-                        current_mode = MODE_RECT
-                    elif buttons[3].is_clicked(event.pos):
-                        current_mode = MODE_SQUARE
-                    elif buttons[4].is_clicked(event.pos):
-                        current_mode = MODE_CIRCLE
-                    elif buttons[5].is_clicked(event.pos):
-                        current_mode = MODE_RIGHT_TRIANGLE
-                    elif buttons[6].is_clicked(event.pos):
-                        current_mode = MODE_EQUILATERAL
-                    elif buttons[7].is_clicked(event.pos):
-                        current_mode = MODE_RHOMBUS
-                    elif buttons[8].is_clicked(event.pos):
-                        current_mode = MODE_ERASER
-                    elif buttons[9].is_clicked(event.pos):
-                        canvas.fill(WHITE)  # Clear canvas
-                    
-                    # Size adjustment
-                    if size_up_btn.is_clicked(event.pos):
+
+                    for i, b in enumerate(buttons):
+                        if b.clicked(e.pos):
+                            if i == 0: mode = MODE_BRUSH
+                            elif i == 1: mode = MODE_LINE
+                            elif i == 2: mode = MODE_RECT
+                            elif i == 3: mode = MODE_SQUARE
+                            elif i == 4: mode = MODE_CIRCLE
+                            elif i == 5: mode = MODE_RIGHT_TRIANGLE
+                            elif i == 6: mode = MODE_EQUILATERAL
+                            elif i == 7: mode = MODE_RHOMBUS
+                            elif i == 8: mode = MODE_ERASER
+                            elif i == 9: canvas.fill(WHITE)
+                            elif i == 10: mode = MODE_BUCKET
+                            elif i == 11: mode = MODE_ISO_TRI
+
+                    # size control
+                    if plus_btn.clicked(e.pos):
                         brush_size = min(50, brush_size + 2)
-                        line_width = min(20, line_width + 1)
-                        eraser_size = min(50, eraser_size + 2)
-                    elif size_down_btn.is_clicked(event.pos):
+                        eraser_size = min(60, eraser_size + 2)
+
+                    if minus_btn.clicked(e.pos):
                         brush_size = max(1, brush_size - 2)
-                        line_width = max(1, line_width - 1)
                         eraser_size = max(5, eraser_size - 2)
-                    
-                    # Color selection
-                    color_palette.check_click(event.pos)
-                    current_color = color_palette.selected_color
-                
+
+                    palette.check(e.pos)
+                    color = palette.selected
+
                 else:
-                    # Start drawing on canvas
+                    if mode == MODE_BUCKET:
+                        target = canvas.get_at((x, cy))[:3]
+                        flood_fill(canvas, (x, cy), target, color)
+                        continue
+
                     drawing = True
-                    start_pos = (x, canvas_mouse_y)
-                    current_pos = start_pos
-                    
-                    # Immediate drawing for brush and eraser
-                    if current_mode == MODE_BRUSH:
-                        pygame.draw.circle(canvas, current_color, start_pos, brush_size)
-                    elif current_mode == MODE_ERASER:
-                        pygame.draw.circle(canvas, WHITE, start_pos, eraser_size)
-            
-            elif event.type == pygame.MOUSEMOTION:
-                # Update current position for preview
-                if canvas_mouse_y >= 0:
-                    current_pos = (mouse_x, canvas_mouse_y)
-                
-                # Continuous drawing for brush and eraser
-                if drawing and current_mode in [MODE_BRUSH, MODE_ERASER]:
-                    if canvas_mouse_y >= 0:
-                        canvas_pos = (mouse_x, canvas_mouse_y)
-                        if current_mode == MODE_BRUSH:
-                            pygame.draw.circle(canvas, current_color, canvas_pos, brush_size)
-                            # Also draw lines between points for smooth drawing
-                            if start_pos:
-                                pygame.draw.line(canvas, current_color, start_pos, canvas_pos, brush_size * 2)
-                                start_pos = canvas_pos
-                        else:
-                            pygame.draw.circle(canvas, WHITE, canvas_pos, eraser_size)
-                            if start_pos:
-                                pygame.draw.line(canvas, WHITE, start_pos, canvas_pos, eraser_size * 2)
-                                start_pos = canvas_pos
-            
-            elif event.type == pygame.MOUSEBUTTONUP:
-                # Finish drawing shapes
-                if drawing and canvas_mouse_y >= 0:
-                    end_pos = (mouse_x, canvas_mouse_y)
-                    
-                    # Draw line
-                    if current_mode == MODE_LINE:
-                        pygame.draw.line(canvas, current_color, start_pos, end_pos, line_width)
-                    
-                    # Draw rectangle
-                    elif current_mode == MODE_RECT:
-                        rect = pygame.Rect(start_pos[0], start_pos[1], 
-                                         end_pos[0] - start_pos[0], 
-                                         end_pos[1] - start_pos[1])
-                        pygame.draw.rect(canvas, current_color, rect, line_width)
-                    
-                    # Draw square
-                    elif current_mode == MODE_SQUARE:
-                        draw_square(canvas, current_color, start_pos, end_pos, line_width)
-                    
-                    # Draw circle
-                    elif current_mode == MODE_CIRCLE:
-                        center = start_pos
-                        radius = int(((end_pos[0] - center[0])**2 + 
-                                    (end_pos[1] - center[1])**2)**0.5)
-                        pygame.draw.circle(canvas, current_color, center, radius, line_width)
-                    
-                    # Draw right triangle
-                    elif current_mode == MODE_RIGHT_TRIANGLE:
-                        draw_right_triangle(canvas, current_color, start_pos, end_pos, line_width)
-                    
-                    # Draw equilateral triangle
-                    elif current_mode == MODE_EQUILATERAL:
-                        draw_equilateral_triangle(canvas, current_color, start_pos, end_pos, line_width)
-                    
-                    # Draw rhombus
-                    elif current_mode == MODE_RHOMBUS:
-                        draw_rhombus(canvas, current_color, start_pos, end_pos, line_width)
-                
+                    start = (x, cy)
+                    current = start
+
+                    if mode == MODE_BRUSH:
+                        pygame.draw.circle(canvas, color, start, brush_size)
+
+                    elif mode == MODE_ERASER:
+                        pygame.draw.circle(canvas, WHITE, start, eraser_size)
+
+            elif e.type == pygame.MOUSEMOTION:
+                if drawing:
+                    if mode == MODE_BRUSH:
+                        pygame.draw.line(canvas, color, start, (mx, cy), brush_size*2)
+                        start = (mx, cy)
+
+                    elif mode == MODE_ERASER:
+                        pygame.draw.line(canvas, WHITE, start, (mx, cy), eraser_size*2)
+                        start = (mx, cy)
+
+                    current = (mx, cy)
+
+            elif e.type == pygame.MOUSEBUTTONUP:
+                if drawing and start and current:
+
+                    if mode == MODE_LINE:
+                        pygame.draw.line(canvas, color, start, current, 3)
+
+                    elif mode == MODE_RECT:
+                        pygame.draw.rect(canvas, color,
+                                         norm_rect(*start, *current), 3)
+
+                    elif mode == MODE_SQUARE:
+                        x1, y1 = start
+                        x2, y2 = current
+                        size = max(abs(x2-x1), abs(y2-y1))
+                        x = x1 if x2 >= x1 else x1 - size
+                        y = y1 if y2 >= y1 else y1 - size
+                        pygame.draw.rect(canvas, color, (x, y, size, size), 3)
+
+                    elif mode == MODE_CIRCLE:
+                        x1, y1 = start
+                        x2, y2 = current
+                        r = int(((x2-x1)**2 + (y2-y1)**2)**0.5)
+                        pygame.draw.circle(canvas, color, start, r, 3)
+
+                    elif mode == MODE_RIGHT_TRIANGLE:
+                        draw_right_triangle(canvas, color, start, current, 3)
+
+                    elif mode == MODE_EQUILATERAL:
+                        draw_equilateral_triangle(canvas, color, start, current, 3)
+
+                    elif mode == MODE_ISO_TRI:
+                        draw_isosceles_triangle(canvas, color, start, current, 3)
+
+                    elif mode == MODE_RHOMBUS:
+                        draw_rhombus(canvas, color, start, current, 3)
+
                 drawing = False
-                start_pos = None
-                current_pos = None
-        
-        # Draw everything
+                start = None
+                current = None
+
+        # ---------- DRAW ----------
         screen.fill(GRAY)
-        
-        # Draw canvas
         screen.blit(canvas, (0, TOOLBAR_HEIGHT))
-        
-        # Draw preview shadow if drawing a shape
-        if drawing and current_mode not in [MODE_BRUSH, MODE_ERASER] and current_pos:
-            preview_surface = screen.copy()
-            if start_pos and current_pos:
-                draw_preview(preview_surface, current_mode, current_color, start_pos, current_pos, line_width)
-            screen.blit(preview_surface, (0, 0))
-        
-        # Draw toolbar background
-        pygame.draw.rect(screen, (200, 200, 200), (0, 0, SCREEN_WIDTH, TOOLBAR_HEIGHT))
-        pygame.draw.line(screen, BLACK, (0, TOOLBAR_HEIGHT), 
-                        (SCREEN_WIDTH, TOOLBAR_HEIGHT), 2)
-        
-        # Draw all buttons
-        for button in buttons:
-            button.draw(screen)
-        
-        # Draw color palette
-        color_palette.draw(screen)
-        
-        # Draw size controls
-        size_up_btn.draw(screen)
-        size_down_btn.draw(screen)
-        
-        # Draw size/width text
-        if current_mode == MODE_LINE:
-            size_text = size_text_font.render(f"Width: {line_width}", True, BLACK)
-        elif current_mode in [MODE_BRUSH, MODE_ERASER]:
-            size_text = size_text_font.render(f"Size: {brush_size}", True, BLACK)
-        else:
-            size_text = size_text_font.render(f"Width: {line_width}", True, BLACK)
-        screen.blit(size_text, (760, 40))
-        
-        # Draw current mode indicator
-        mode_text = size_text_font.render(f"Mode: {current_mode.replace('_', ' ').title()}", 
-                                          True, BLACK)
-        screen.blit(mode_text, (10, 40))
-        
-        # Draw shape preview icon
-        preview_x = 850
-        preview_y = 35
-        if current_mode == MODE_ERASER:
-            pygame.draw.circle(screen, WHITE, (preview_x, preview_y), 8)
-            pygame.draw.circle(screen, BLACK, (preview_x, preview_y), 8, 1)
-        elif current_mode == MODE_LINE:
-            pygame.draw.line(screen, current_color, (preview_x-10, preview_y-5), 
-                           (preview_x+10, preview_y+5), 2)
-        else:
-            pygame.draw.circle(screen, current_color, (preview_x, preview_y), 8)
-            pygame.draw.circle(screen, BLACK, (preview_x, preview_y), 8, 1)
-        
+
+        if drawing:
+            temp = screen.copy()
+            preview(temp, mode, color, start, current, 3)
+            screen.blit(temp, (0, 0))
+
+        pygame.draw.rect(screen, (200, 200, 200),
+                         (0, 0, SCREEN_WIDTH, TOOLBAR_HEIGHT))
+
+        for b in buttons:
+            b.draw(screen)
+
+        plus_btn.draw(screen)
+        minus_btn.draw(screen)
+
+        palette.draw(screen)
+
+        # SIZE DISPLAY
+        font = pygame.font.Font(None, 22)
+        screen.blit(font.render(f"Brush: {brush_size}", True, BLACK), (720, 33))
+        screen.blit(font.render(f"Eraser: {eraser_size}", True, BLACK), (720, 55))
+
         pygame.display.flip()
         clock.tick(60)
-    
+
     pygame.quit()
     sys.exit()
+
 
 if __name__ == "__main__":
     main()

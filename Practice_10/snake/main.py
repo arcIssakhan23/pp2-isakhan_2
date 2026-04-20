@@ -10,6 +10,7 @@ GRID_SIZE = 20
 GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 
+#some colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -19,19 +20,23 @@ YELLOW = (255, 255, 0)
 PURPLE = (255, 0, 255)
 CYAN = (0, 255, 255)
 ORANGE = (255, 165, 0)
+LIGHT_BLUE = (100, 200, 255)
 
+#movement
 UP = (0, -1)
 DOWN = (0, 1)
 LEFT = (-1, 0)
 RIGHT = (1, 0)
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Snake Game with Levels")
+pygame.display.set_caption("Snake Game")
 clock = pygame.time.Clock()
 
 font = pygame.font.Font(None, 36)
 big_font = pygame.font.Font(None, 72)
 
+
+#about snake
 class Snake:
     def __init__(self):
         self.positions = [
@@ -86,26 +91,106 @@ class Snake:
                 pygame.draw.rect(surface, BLACK, 
                                (pos[0], pos[1], GRID_SIZE, GRID_SIZE), 1)
 
+    def check_wall_collision(self, walls):
+        return self.positions[0] in walls.positions
+
+#about food
 class Food:
-    def __init__(self, snake_positions):
+    def __init__(self, snake_positions, walls_positions=[]):
         self.position = [0, 0]
         self.color = RED
-        self.respawn(snake_positions)
+        self.walls_positions = walls_positions
+        self.spawn_time = pygame.time.get_ticks()
+        self.respawn(snake_positions, walls_positions)
 
-    def respawn(self, snake_positions):
+    def respawn(self, snake_positions, walls_positions=[]):
         while True:
             x = random.randint(0, GRID_WIDTH - 1) * GRID_SIZE
             y = random.randint(0, GRID_HEIGHT - 1) * GRID_SIZE
-            
-            if [x, y] not in snake_positions:
+
+            if [x, y] not in snake_positions and [x, y] not in walls_positions:
                 self.position = [x, y]
+                self.spawn_time = pygame.time.get_ticks()
                 break
+    
+    def update(self):
+        current_time = pygame.time.get_ticks()
+        time_alive = current_time - self.spawn_time
+
+        # if 45 seconds passed → force respawn
+        if time_alive > 45000:
+            return "RESPAWN"
+
+        return time_alive
 
     def draw(self, surface):
         pygame.draw.rect(surface, self.color, 
                         (self.position[0], self.position[1], GRID_SIZE, GRID_SIZE))
         pygame.draw.rect(surface, WHITE, 
                         (self.position[0], self.position[1], GRID_SIZE, GRID_SIZE), 2)
+
+#about border and labyrint 
+class Walls:
+    def __init__(self):
+        self.positions = []
+
+    def generate(self, level):
+        if level < 2:
+            return
+
+        
+        if level % 2 == 0:
+            base_x = random.randint(3, GRID_WIDTH - 8) * GRID_SIZE
+            base_y = random.randint(3, GRID_HEIGHT - 8) * GRID_SIZE
+
+            shape_type = random.choice([0, 1, 2, 3])
+            new_blocks = []
+
+            if shape_type == 0:  
+                for i in range(5):
+                    new_blocks.append([base_x, base_y + i * GRID_SIZE])
+                for i in range(5):
+                    new_blocks.append([base_x + i * GRID_SIZE, base_y])
+
+            elif shape_type == 1:  
+                for i in range(5):
+                    new_blocks.append([base_x, base_y + i * GRID_SIZE])
+                for i in range(5):
+                    new_blocks.append([base_x - i * GRID_SIZE, base_y])
+
+            elif shape_type == 2:  
+                for i in range(5):
+                    new_blocks.append([base_x, base_y - i * GRID_SIZE])
+                for i in range(5):
+                    new_blocks.append([base_x + i * GRID_SIZE, base_y])
+
+            else:  
+                for i in range(5):
+                    new_blocks.append([base_x, base_y - i * GRID_SIZE])
+                for i in range(5):
+                    new_blocks.append([base_x - i * GRID_SIZE, base_y])
+
+            for block in new_blocks:
+                if block not in self.positions:
+                    self.positions.append(block)
+
+        
+        else:
+            for _ in range(3):  
+                x = random.randint(0, GRID_WIDTH - 1) * GRID_SIZE
+                y = random.randint(0, GRID_HEIGHT - 1) * GRID_SIZE
+
+                if [x, y] not in self.positions:
+                    self.positions.append([x, y])
+
+
+
+    def draw(self, surface):
+        for pos in self.positions:
+            pygame.draw.rect(surface, LIGHT_BLUE,
+                             (pos[0], pos[1], GRID_SIZE, GRID_SIZE))
+            pygame.draw.rect(surface, WHITE,
+                             (pos[0], pos[1], GRID_SIZE, GRID_SIZE), 1)
 
 def show_game_over(screen, score, level):
     screen.fill(BLACK)
@@ -130,6 +215,8 @@ def main():
     
     score = 0
     level = 1
+    walls = Walls()
+    walls.generate(level)
     foods_eaten = 0
     FOODS_PER_LEVEL = 3
     
@@ -158,22 +245,36 @@ def main():
                         snake.change_direction(RIGHT)
                     elif event.key == pygame.K_ESCAPE:
                         running = False
+                    # Key F to fix problem with stacked food
+                    elif event.key == pygame.K_f:
+                        food.respawn(snake.positions, walls.positions)
+
+
                 else:
                     if event.key == pygame.K_SPACE:
-                        snake = Snake()
-                        food = Food(snake.positions)
                         score = 0
                         level = 1
                         foods_eaten = 0
                         current_speed = base_speed
+
+                        snake = Snake()
+                        food = Food(snake.positions)
+
+                        walls = Walls()
+                        walls.generate(level)
+
                         game_active = True
                     elif event.key == pygame.K_ESCAPE:
                         running = False
         
         if game_active:
             snake.move()
+
+            result = food.update()
+            if result == "RESPAWN":
+                food.respawn(snake.positions, walls.positions)
             
-            if snake.check_border_collision() or snake.check_self_collision():
+            if (snake.check_border_collision() or snake.check_self_collision() or snake.check_wall_collision(walls)):
                 game_active = False
                 continue
             
@@ -186,6 +287,8 @@ def main():
                     level += 1
                     foods_eaten = 0
                     current_speed = base_speed + (level * 2)
+
+                    walls.generate(level)   
                 
                 food.respawn(snake.positions)
             
@@ -196,6 +299,7 @@ def main():
             for y in range(0, SCREEN_HEIGHT, GRID_SIZE):
                 pygame.draw.line(screen, (20, 20, 20), (0, y), (SCREEN_WIDTH, y))
             
+            walls.draw(screen)
             snake.draw(screen)
             food.draw(screen)
             
@@ -210,12 +314,14 @@ def main():
             foods_left_text = font.render(f"Next Level: {foods_eaten}/{FOODS_PER_LEVEL}", True, PURPLE)
             screen.blit(foods_left_text, (10, 130))
             
-            controls_text = font.render("WASD / Arrows", True, ORANGE)
-            screen.blit(controls_text, (SCREEN_WIDTH - 200, 10))
+            
             
         else:
             show_game_over(screen, score, level)
         
+
+
+
         pygame.display.flip()
     
     pygame.quit()
